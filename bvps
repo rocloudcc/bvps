@@ -4,7 +4,7 @@
 read -p "请输入A VPS的内网IP地址: " A_VPS_INTERNAL_IP
 
 # 配置B VPS的网络接口
-ifconfig eth0 B_VPS_INTERNAL_IP netmask 255.255.255.0 up
+ifconfig eth0 $A_VPS_INTERNAL_IP netmask 255.255.255.0 up
 
 # 启用IP数据包转发
 echo "1" > /proc/sys/net/ipv4/ip_forward
