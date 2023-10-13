@@ -1,24 +1,35 @@
 #!/bin/bash
 
-# 提示用户输入A VPS的内网IP地址
+# 设置变量
+A_VPS_INTERNAL_IP=""
+B_VPS_INTERNAL_IP=""
+
+# 函数：显示错误信息并退出
+function display_error_and_exit() {
+    echo "错误：$1"
+    exit 1
+}
+
+# 函数：检查是否是root用户
+function check_root() {
+    if [ "$EUID" -ne 0 ]; then
+        display_error_and_exit "请使用root权限运行此脚本。"
+    fi
+}
+
+# 函数：设置B VPS的网络
+function configure_b_vps() {
+    ifconfig eth0 "$B_VPS_INTERNAL_IP" netmask 255.255.255.0 up || display_error_and_exit "配置B VPS网络失败。"
+    echo "1" > /proc/sys/net/ipv4/ip_forward || display_error_and_exit "启用IP数据包转发失败。"
+    ip route add default via "$A_VPS_INTERNAL_IP" || display_error_and_exit "设置B VPS默认网关失败。"
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE || display_error_and_exit "配置NAT规则失败。"
+    iptables -A FORWARD -i eth0 -o eth0 -j ACCEPT || display_error_and_exit "配置防火墙规则失败。"
+    systemctl restart networking || display_error_and_exit "重启网络服务失败。"
+    echo "B VPS已配置为A VPS的网络出口。"
+}
+
+# 主程序
+check_root
 read -p "请输入A VPS的内网IP地址: " A_VPS_INTERNAL_IP
-
-# 配置B VPS的网络接口
-ifconfig eth0 $A_VPS_INTERNAL_IP netmask 255.255.255.0 up
-
-# 启用IP数据包转发
-echo "1" > /proc/sys/net/ipv4/ip_forward
-
-# 设置B VPS为A VPS的默认网关
-ip route add default via $A_VPS_INTERNAL_IP
-
-# 配置NAT规则
-iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-
-# 防火墙规则
-iptables -A FORWARD -i eth0 -o eth0 -j ACCEPT
-
-# 重启网络服务
-systemctl restart networking
-
-echo "B VPS已配置为A VPS的网络出口。"
+read -p "请输入B VPS的内网IP地址: " B_VPS_INTERNAL_IP
+configure_b_vps
