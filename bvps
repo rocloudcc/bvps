@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# 提示用户输入A VPS的内网IP地址
+read -p "请输入A VPS的内网IP地址: " A_VPS_INTERNAL_IP
+
+# 配置B VPS的网络接口
+ifconfig eth0 B_VPS_INTERNAL_IP netmask 255.255.255.0 up
+
+# 启用IP数据包转发
+echo "1" > /proc/sys/net/ipv4/ip_forward
+
+# 设置B VPS为A VPS的默认网关
+ip route add default via $A_VPS_INTERNAL_IP
+
+# 配置NAT规则
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+
+# 防火墙规则
+iptables -A FORWARD -i eth0 -o eth0 -j ACCEPT
+
+# 重启网络服务
+systemctl restart networking
+
+echo "B VPS已配置为A VPS的网络出口。"
