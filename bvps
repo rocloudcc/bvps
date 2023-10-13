@@ -1,23 +1,7 @@
 #!/bin/bash
 
-# 设置变量
-A_VPS_INTERNAL_IP=""
-B_VPS_INTERNAL_IP=""
-
-# 函数：显示错误信息并退出#!/bin/bash
-
-# 默认参数值，可以根据需要进行修改
-destination_ip="香港的内网IP"
-local_ip="广东的内网IP"
-
-# 如果参数未设置，则提示用户输入
-if [ "$destination_ip" = "香港的内网IP" ]; then
-    read -p "请输入香港的内网IP地址: " destination_ip
-fi
-
-if [ "$local_ip" = "广东的内网IP" ]; then
-    read -p "请输入广东的内网IP地址: " local_ip
-fi
+read -p "请输入香港内网IP地址: " destination_ip
+read -p "请输入广州内网IP地址: " local_ip
 
 # 清空现有的规则和链
 iptables -F
@@ -31,11 +15,11 @@ iptables -P OUTPUT ACCEPT
 # 启用IP转发
 sysctl -w net.ipv4.ip_forward=1
 
-# 配置PREROUTING链，将指定端口的流量进行DNAT到香港的内网IP
+# 配置PREROUTING链，将指定端口的流量进行DNAT到香港内网IP
 iptables -t nat -A PREROUTING -p tcp --dport 1025:65535 -j DNAT --to-destination "$destination_ip"
 iptables -t nat -A PREROUTING -p udp --dport 1025:65535 -j DNAT --to-destination "$destination_ip"
 
-# 配置POSTROUTING链，将来自香港的内网IP的响应流量进行SNAT，将源地址设置为广东的内网IP
+# 配置POSTROUTING链，将来自香港内网IP的响应流量进行SNAT，将源地址设置为广州内网IP
 iptables -t nat -A POSTROUTING -p tcp -d "$destination_ip" --dport 1025:65535 -j SNAT --to-source "$local_ip"
 iptables -t nat -A POSTROUTING -p udp -d "$destination_ip" --dport 1025:65535 -j SNAT --to-source "$local_ip"
 
@@ -48,31 +32,3 @@ apt-get update
 apt-get install -y iptables-persistent
 
 echo "内网传输配置完成。"
-function display_error_and_exit() {
-    echo "错误：$1"
-    exit 1
-}
-
-# 函数：检查是否是root用户
-function check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        display_error_and_exit "请使用root权限运行此脚本。"
-    fi
-}
-
-# 函数：设置B VPS的网络
-function configure_b_vps() {
-    ifconfig eth0 "$B_VPS_INTERNAL_IP" netmask 255.255.255.0 up || display_error_and_exit "配置B VPS网络失败。"
-    echo "1" > /proc/sys/net/ipv4/ip_forward || display_error_and_exit "启用IP数据包转发失败。"
-    ip route add default via "$A_VPS_INTERNAL_IP" || display_error_and_exit "设置B VPS默认网关失败。"
-    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE || display_error_and_exit "配置NAT规则失败。"
-    iptables -A FORWARD -i eth0 -o eth0 -j ACCEPT || display_error_and_exit "配置防火墙规则失败。"
-    systemctl restart networking || display_error_and_exit "重启网络服务失败。"
-    echo "B VPS已配置为A VPS的网络出口。"
-}
-
-# 主程序
-check_root
-read -p "请输入A VPS的内网IP地址: " A_VPS_INTERNAL_IP
-read -p "请输入B VPS的内网IP地址: " B_VPS_INTERNAL_IP
-configure_b_vps
