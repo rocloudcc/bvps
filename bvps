@@ -4,7 +4,50 @@
 A_VPS_INTERNAL_IP=""
 B_VPS_INTERNAL_IP=""
 
-# 函数：显示错误信息并退出
+# 函数：显示错误信息并退出#!/bin/bash
+
+# 默认参数值，可以根据需要进行修改
+destination_ip="香港的内网IP"
+local_ip="广东的内网IP"
+
+# 如果参数未设置，则提示用户输入
+if [ "$destination_ip" = "香港的内网IP" ]; then
+    read -p "请输入香港的内网IP地址: " destination_ip
+fi
+
+if [ "$local_ip" = "广东的内网IP" ]; then
+    read -p "请输入广东的内网IP地址: " local_ip
+fi
+
+# 清空现有的规则和链
+iptables -F
+iptables -X
+
+# 设置默认策略
+iptables -P INPUT ACCEPT
+iptables -P FORWARD ACCEPT
+iptables -P OUTPUT ACCEPT
+
+# 启用IP转发
+sysctl -w net.ipv4.ip_forward=1
+
+# 配置PREROUTING链，将指定端口的流量进行DNAT到香港的内网IP
+iptables -t nat -A PREROUTING -p tcp --dport 1025:65535 -j DNAT --to-destination "$destination_ip"
+iptables -t nat -A PREROUTING -p udp --dport 1025:65535 -j DNAT --to-destination "$destination_ip"
+
+# 配置POSTROUTING链，将来自香港的内网IP的响应流量进行SNAT，将源地址设置为广东的内网IP
+iptables -t nat -A POSTROUTING -p tcp -d "$destination_ip" --dport 1025:65535 -j SNAT --to-source "$local_ip"
+iptables -t nat -A POSTROUTING -p udp -d "$destination_ip" --dport 1025:65535 -j SNAT --to-source "$local_ip"
+
+# 保存规则
+mkdir -p /etc/iptables/
+iptables-save > /etc/iptables/rules.v4
+
+# 安装iptables-persistent以永久保存规则
+apt-get update
+apt-get install -y iptables-persistent
+
+echo "内网传输配置完成。"
 function display_error_and_exit() {
     echo "错误：$1"
     exit 1
